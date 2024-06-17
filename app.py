@@ -13,9 +13,9 @@ import mysql.connector
 from mysql.connector import Error
 import logging
 
-from application.sync import sync
+from util.sync import sync
 
-from application.config import per_page, NOTICE, DOMAIN, SECRET_KEY, USERNAME, PASSWORD, DATABASE, DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
+from util.config import per_page, NOTICE, DOMAIN, SECRET_KEY, USERNAME, PASSWORD, DATABASE, DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
 
 # 打印变量值
 print(f"分页: {per_page}")

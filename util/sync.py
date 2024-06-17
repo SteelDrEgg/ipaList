@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import os
 import sys
 
-from application.config import DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME, DOMAIN
+from .config import DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME, DOMAIN
 
 
 # 连接到MySQL数据库
