@@ -5,7 +5,7 @@ import glob
 import urllib
 from urllib.parse import quote, unquote
 from math import ceil
-from flask import Flask, render_template, request, redirect, send_from_directory, url_for, abort, jsonify
+from flask import Flask, render_template, request, redirect, send_from_directory, url_for, abort, jsonify, current_app
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required
 from dotenv import load_dotenv
 import flask
@@ -15,7 +15,10 @@ import logging
 
 from util.sync import sync
 
-from util.config import per_page, NOTICE, DOMAIN, SECRET_KEY, USERNAME, PASSWORD, DATABASE, DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
+from util.config import per_page, NOTICE, DOMAIN, SECRET_KEY, USERNAME, PASSWORD, DATABASE, DB_HOST, DB_PORT, DB_USER, \
+    DB_PASSWORD, DB_NAME
+
+from application import register
 
 # 打印变量值
 print(f"分页: {per_page}")
@@ -32,13 +35,14 @@ if DATABASE == 'ON':
     print(f"数据库密码: {DB_PASSWORD}")
     print(f"数据库名: {DB_NAME}")
 
-
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 3600  # 设置静态文件缓存时间（单位：秒）
-app.config['SECRET_KEY'] = SECRET_KEY   # 设置一个密钥，用于加密用户凭证
+app.config['SECRET_KEY'] = SECRET_KEY  # 设置一个密钥，用于加密用户凭证
 
 login_manager = LoginManager()
 login_manager.init_app(app)
+
+register(app)
 
 # 定义用户模型
 class User(UserMixin):
@@ -46,18 +50,24 @@ class User(UserMixin):
         self.id = username
         self.password = password
 
+
 # 模拟一个用户数据库
 users = {
     USERNAME: User(USERNAME, PASSWORD),
 }
 
+with app.app_context():
+    current_app.users = users
+
 @login_manager.user_loader
 def load_user(user_id):
     return users.get(user_id)
 
+
 @login_manager.unauthorized_handler
 def unauthorized():
-    return redirect(url_for('login'))
+    return redirect(url_for('auth.login'))
+
 
 # 连接到MySQL数据库
 def create_connection():
@@ -71,10 +81,11 @@ def create_connection():
                 password=DB_PASSWORD,
                 database=DB_NAME
             )
-#            print("Connected to MySQL database")
+        #            print("Connected to MySQL database")
         except Error as e:
             print(f"Error connecting to MySQL database: {e}")
     return connection
+
 
 # 创建plist表格（如果不存在）
 def create_plist_table():
@@ -101,6 +112,7 @@ def create_plist_table():
                 cursor.close()
                 connection.close()
 
+
 # 插入数据到plist表格
 def insert_plist_data(plist_filename, url, filename):
     if os.getenv('DATABASE') == 'ON':
@@ -122,6 +134,7 @@ def insert_plist_data(plist_filename, url, filename):
                 cursor.close()
                 connection.close()
 
+
 # 删除plist表格中的记录
 def delete_plist_data(plist_filename):
     if os.getenv('DATABASE') == 'ON':
@@ -139,6 +152,7 @@ def delete_plist_data(plist_filename):
             finally:
                 cursor.close()
                 connection.close()
+
 
 def check_duplicate(url):
     is_duplicate = False
@@ -174,9 +188,9 @@ import locale
 from math import ceil
 from pypinyin import pinyin, NORMAL
 
-
 # 设置本地化环境为当前系统默认
 locale.setlocale(locale.LC_ALL, '')
+
 
 def get_sorted_plist_files():
     plist_folder = os.path.join(os.path.dirname(__file__), 'plist')
@@ -195,17 +209,19 @@ def get_sorted_plist_files():
             title_end_index = plist_content.find('</string>', title_start_index)
             title = plist_content[title_start_index:title_end_index].strip('<string>')
 
-#            if len(title) > 61:
-#                title = title[:40] + '..'
+        #            if len(title) > 61:
+        #                title = title[:40] + '..'
 
         # 将中文标题转换为拼音字符串，并按拼音排序
         pinyin_title = ''.join([p[0] for p in pinyin(title, style=NORMAL)])
-        plist_info.append({'filename': plist_filename, 'code': plist_code, 'title': title, 'pinyin_title': pinyin_title})
+        plist_info.append(
+            {'filename': plist_filename, 'code': plist_code, 'title': title, 'pinyin_title': pinyin_title})
 
     # 按拼音排序
     plist_info.sort(key=lambda x: x['pinyin_title'])
 
     return plist_info
+
 
 @app.route('/')
 def index():
@@ -229,20 +245,21 @@ def index():
     plist_info = plist_info[start_index:end_index]
 
     domain = DOMAIN  # 使用定义的URL变量
-    return render_template('index.html', notice_content=notice_content, domain=domain, plist_info=plist_info, page=page, total_pages=total_pages, app_count=app_count)
+    return render_template('index.html', notice_content=notice_content, domain=domain, plist_info=plist_info, page=page,
+                           total_pages=total_pages, app_count=app_count)
+
 
 def get_filename_from_url(url):
     return urllib.parse.unquote(os.path.basename(url))
 
+
 def is_valid_url(url):
     return url.startswith('http://') or url.startswith('https://')
+
 
 # 设置日志输出
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-
-
 
 
 @app.route('/ipa')
@@ -314,13 +331,11 @@ def generate_plist_from_url():
     return jsonify({'status': 'success', 'plist_url': plist_url})
 
 
-
-
-
 @app.route('/plist/<filename>')
 def plist(filename):
     plist_folder = os.path.join(os.path.dirname(__file__), 'plist')
     return send_from_directory(plist_folder, filename)
+
 
 @app.route('/plist_list')
 @login_required  # 添加@login_required装饰器，要求用户登录才能访问该页面
@@ -341,8 +356,8 @@ def plist_list():
             title_end_index = plist_content.find('</string>', title_start_index)
             title = plist_content[title_start_index:title_end_index].strip('<string>')
 
-#            if len(title) > 60:
-#                title = title[:60] + '..'
+        #            if len(title) > 60:
+        #                title = title[:60] + '..'
 
         plist_info.append({'filename': plist_filename, 'code': plist_code, 'title': title})
 
@@ -352,29 +367,31 @@ def plist_list():
     app_count = len(plist_info)
     # 分页逻辑
     page = request.args.get('page', default=1, type=int)
-#    per_page = 10
+    #    per_page = 10
     total_pages = ceil(len(plist_info) / per_page)
     start_index = (page - 1) * per_page
     end_index = start_index + per_page
     plist_info = plist_info[start_index:end_index]
 
     domain = DOMAIN  # 使用定义的URL变量
-    return render_template('plist_list.html', plist_info=plist_info, domain=domain, page=page, total_pages=total_pages,  database_status=DATABASE, app_count=app_count)
+    return render_template('plist_list.html', plist_info=plist_info, domain=domain, page=page, total_pages=total_pages,
+                           database_status=DATABASE, app_count=app_count)
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        user = users.get(username)
 
-        if user and user.password == password:
-            login_user(user)  # 登录用户
-            return redirect(url_for('plist_list'))
-        else:
-            return render_template('login.html', error=True)
-
-    return render_template('login.html')
+# @app.route('/login', methods=['GET', 'POST'])
+# def login():
+#     if request.method == 'POST':
+#         username = request.form['username']
+#         password = request.form['password']
+#         user = users.get(username)
+#
+#         if user and user.password == password:
+#             login_user(user)  # 登录用户
+#             return redirect(url_for('plist_list'))
+#         else:
+#             return render_template('login.html', error=True)
+#
+#     return render_template('login.html')
 
 
 @app.route('/download_file/<filename>')
@@ -382,7 +399,7 @@ def login():
 def download_file(filename):
     plist_folder = os.path.join(os.path.dirname(__file__), 'plist')
     plist_filepath = os.path.join(plist_folder, filename)
-    
+
     if os.path.exists(plist_filepath):
         with open(plist_filepath, 'r') as plist_file:
             plist_content = plist_file.read()
@@ -396,6 +413,7 @@ def download_file(filename):
     else:
         return "File not found"
 
+
 @app.route('/delete_plist/<filename>')
 @login_required  # 添加@login_required装饰器，要求用户登录才能访问该页面
 def delete_plist(filename):
@@ -408,6 +426,7 @@ def delete_plist(filename):
         return redirect(url_for('plist_list'))
     else:
         return "File not found"
+
 
 # 批量删除plist文件的路由
 @app.route('/batch_delete', methods=['POST'])
@@ -438,7 +457,6 @@ def batch_delete():
     return jsonify(response)
 
 
-
 import logging
 
 # 设置日志输出
@@ -464,9 +482,11 @@ def edit_plist():
             logger.info(f"Editing plist file: url={url}, filename={filename}")
 
             # 在这里设置旧的链接标记字符串
-            old_url = os.popen(f"grep software-package -A4 {plist_filepath} | grep url -A1 | grep url -A1|awk -F '>' 'NR==2 {{print $2}}'|awk -F '<' 'NR==1 {{print $1}}'").read().strip()
+            old_url = os.popen(
+                f"grep software-package -A4 {plist_filepath} | grep url -A1 | grep url -A1|awk -F '>' 'NR==2 {{print $2}}'|awk -F '<' 'NR==1 {{print $1}}'").read().strip()
             # 在这里设置旧的文件名标记字符串
-            old_filename = os.popen(f"grep -w software -A4 {plist_filepath} | grep -A1 title | grep -o '<string>[^<]*</string>' | sed 's/<[^>]*>//g'").read().strip()
+            old_filename = os.popen(
+                f"grep -w software -A4 {plist_filepath} | grep -A1 title | grep -o '<string>[^<]*</string>' | sed 's/<[^>]*>//g'").read().strip()
 
             print(f"old_url: {old_url}")
             print(f"old_filename: {old_filename}")
@@ -522,6 +542,7 @@ def edit_plist():
         logger.error(f"File not found: {plist_filename}")
         return "File not found"
 
+
 def update_plist_data(plist_filename, url, filename):
     if os.getenv('DATABASE') == 'ON':
         connection = create_connection()
@@ -538,6 +559,7 @@ def update_plist_data(plist_filename, url, filename):
             finally:
                 cursor.close()
                 connection.close()
+
 
 @app.route('/search')
 def search():
@@ -562,15 +584,16 @@ def search():
             title = title.replace('<string>', '')
             title = title.replace('              ', '')
 
-#            if len(title) > 61:
-#                title = title[40] + '..'
+            #            if len(title) > 61:
+            #                title = title[40] + '..'
 
             if keyword.upper() in title.upper():  # 匹配标题
                 domain = DOMAIN
                 plist_info.append({'domain': domain, 'filename': plist_filename, 'code': plist_code, 'title': title})
-      
+
     logging.info("Search results for keyword '{}': {}".format(keyword, plist_info))
     return jsonify(plist_info)
+
 
 @app.route('/sync', methods=['GET'])
 @login_required
@@ -581,12 +604,11 @@ def sync_route():
     return f'Sync completed. Generated: {generated_count} .plist files, Inserted: {inserted_count} records.'
 
 
-
-@app.route('/logout')
-@login_required  # 要求用户登录才能注销
-def logout():
-    logout_user()  # 注销用户
-    return redirect(url_for('index'))
+# @app.route('/logout')
+# @login_required  # 要求用户登录才能注销
+# def logout():
+#     logout_user()  # 注销用户
+#     return redirect(url_for('index'))
 
 if __name__ == '__main__':
     # 创建plist表格（如果不存在）

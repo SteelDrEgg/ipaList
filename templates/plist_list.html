@@ -69,7 +69,7 @@ function confirmDelete(filename) {
 <body>
     <div class="table-container">
         <a href="{{ url_for('index') }}" class="return-button">返回首页</a>
-        <a href="{{ url_for('logout') }}" class="return-button">退出登录</a>
+        <a href="{{ url_for('auth.logout') }}" class="return-button">退出登录</a>
         <h1>文件列表</h1>
         <div class="search-container">
             <input type="text" id="search-input" class="search-input" onkeyup="showlist()" placeholder="搜索关键字" onkeydown="handleKeyDown(event)" autofocus="autofocus">
